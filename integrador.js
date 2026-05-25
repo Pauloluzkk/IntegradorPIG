@@ -92,7 +92,7 @@ async function runHealthChecks() {
     // Lutadores — verificado via init
     // Lutas
     try {
-        const r = await fetch('https://bet3m-production.up.railway.app/lutas', {
+        const r = await fetch('/api/lutas/lutas', {
             headers: { 'X-API-KEY': 'bet3M-UENP' },
             signal: AbortSignal.timeout(6000)
         });
