@@ -1,5 +1,5 @@
 # 🥊 IntegradorPIG — Integrador de APIs NanadeFight
-> Painel integrador e API Gateway para o sistema distribuído de apostas — UENP Sistemas Distribuídos 2025.
+> Painel integrador e API Gateway para o sistema distribuído de apostas — UENP Sistemas Distribuídos 2026.
 
 Este projeto atua como um **API Gateway / Proxy reverso** e painel unificado. Ele resolve os problemas de **CORS** do navegador e implementa mecanismos de **failover** (backup) automático e tradução de dados entre as APIs alternativas da classe.
 
