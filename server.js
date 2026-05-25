@@ -20,39 +20,61 @@ function getHeaders(req, targetHost) {
     return headers;
 }
 
-// ==========================================
-// LUTADORES PROXY (Transparent)
-// ==========================================
-app.use('/api/lutadores', async (req, res) => {
-    const targetUrl = 'https://lutadores-api-22f61a69f511.herokuapp.com';
-    try {
-        const url = `${targetUrl}${req.url}`;
-        const headers = getHeaders(req, 'lutadores-api-22f61a69f511.herokuapp.com');
-        const options = {
-            method: req.method,
-            headers: headers
-        };
+async function proxyLutadoresRequest(req, res, targetUrl) {
+    const url = `${targetUrl}${req.url}`;
+    const parsed = new URL(targetUrl);
+    const headers = getHeaders(req, parsed.host);
+    const options = {
+        method: req.method,
+        headers: headers
+    };
 
-        if (req.method !== 'GET' && req.method !== 'HEAD' && req.body && Object.keys(req.body).length > 0) {
-            options.body = JSON.stringify(req.body);
-            options.headers['content-type'] = 'application/json';
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body && Object.keys(req.body).length > 0) {
+        options.body = JSON.stringify(req.body);
+        options.headers['content-type'] = 'application/json';
+    }
+
+    console.log(`[LUTADORES PROXY] Forwarding ${req.method} ${req.originalUrl} -> ${url}`);
+    const response = await fetch(url, options);
+
+    response.headers.forEach((value, key) => {
+        if (!['content-encoding', 'transfer-encoding', 'content-length'].includes(key.toLowerCase())) {
+            res.setHeader(key, value);
         }
+    });
 
-        console.log(`[LUTADORES PROXY] Forwarding ${req.method} ${req.originalUrl} -> ${url}`);
-        const response = await fetch(url, options);
+    res.status(response.status);
+    res.send(await response.text());
+}
 
-        response.headers.forEach((value, key) => {
-            if (!['content-encoding', 'transfer-encoding', 'content-length'].includes(key.toLowerCase())) {
-                res.setHeader(key, value);
-            }
-        });
+app.use('/api/lutadores', async (req, res) => {
+    const primaryUrl = 'https://lutadores-api-22f61a69f511.herokuapp.com';
+    const secondaryUrl = 'https://api-lutadoressd.onrender.com/api';
 
-        res.status(response.status);
+    if (req.url === '/chave-publica' || req.url === '/handshake') {
+        try {
+            return await proxyLutadoresRequest(req, res, primaryUrl);
+        } catch (err) {
+            console.error(`[LUTADORES PROXY ERROR] Handshake/Key retrieval failed:`, err.message);
+            res.status(502).json({ error: 'Primary Lutadores API handshake failed', details: err.message });
+        }
+        return;
+    }
 
-        res.send(await response.text());
-    } catch (err) {
-        console.error(`[LUTADORES PROXY ERROR]`, err.message);
-        res.status(502).json({ error: 'Lutadores API proxy failed', details: err.message });
+    try {
+        await proxyLutadoresRequest(req, res, primaryUrl);
+    } catch (primaryErr) {
+        console.warn(`[LUTADORES FAILOVER] Primary failed (${primaryErr.message}). Trying secondary API...`);
+        try {
+            await proxyLutadoresRequest(req, res, secondaryUrl);
+        } catch (secondaryErr) {
+            console.error(`[LUTADORES FATAL] Both Lutadores APIs failed.`);
+            res.status(502).json({
+                error: 'All Lutadores APIs are offline',
+                primaryError: primaryErr.message,
+                secondaryError: secondaryErr.message
+            });
+        }
     }
 });
 
